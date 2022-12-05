@@ -1,0 +1,107 @@
+---
+title: "TSA Demo Class: Importing and Cleaning Data Sets"
+author: "Luana Lima"
+date: "12/05/2022"
+output: pdf_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+## Loading packages and initializing
+
+First R code chunk is for loading packages. By setting message = FALSE, the code will appear but not the output pdf file. 
+
+```{r package, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+```
+
+## Importing Inflow Data
+
+Inflow data for reservoirs in Brazil. 
+
+```{r importdata, message=FALSE, warning=FALSE}
+
+#Importing time series data from text file#
+raw_inflow_data <- read.table(file="./Data/inflowtimeseries.txt",header=FALSE,skip=0)
+
+#Trim the table to include only columns you need
+nhydro <- ncol(raw_inflow_data)-2
+nobs <- nrow(raw_inflow_data)-4 #trim zeros
+
+#If your file does not have header like this one you can add column names after 
+#creating the data frame
+colnames(raw_inflow_data)=c("Month","Year", "HP1", "HP2","HP3","HP4", "HP5",
+                            "HP6","HP7", "HP8","HP9","HP10", "HP11","HP12", 
+                            "HP13", "HP14","HP15")
+
+#Creating the date object
+#using package lubridate function my()
+my_date <- my(paste(raw_inflow_data[1:nobs,1],raw_inflow_data[1:nobs,2],sep="-"))  #function my from package lubridate
+
+#add that to inflow_data and store in a new data frame 
+inflow_data <- data.frame("Date"=my_date,"Amazon.River"=raw_inflow_data[1:nobs,"HP15"])
+
+write.csv(inflow_data,file="./Data/Processed/AmazonInflow.csv",row.names = FALSE)
+
+```
+
+## Importing Electricity Price Data
+
+We will work with monthly average for electricity retail price in US. The data is from the U.S. Energy Information Administration and can be download [here][https://www.eia.gov/electricity/data/browser/#/topic/7?agg=2,0,1&geo=g&freq=M%2013:41:41%20GMT-0500%20(EST)]. 
+
+```{r}
+
+#Importing time series data from text file#
+electricity_price <- read.csv(file="./Data/Average_retail_price_of_electricity_United_States_monthly.csv",header=TRUE,skip=4)
+
+#Inspect data
+head(electricity_price)
+nvar <- ncol(electricity_price) - 1
+nobs <- nrow(electricity_price)
+
+#Preparing the data - create date object and rename columns
+electricity_price_processed <-
+  electricity_price %>%
+  mutate( Date = my(Month) ) %>% 
+  rename( All.sectors = all.sectors.cents.per.kilowatthour ) %>% 
+  rename( Residential = residential.cents.per.kilowatthour ) %>% 
+  rename( Commercial = commercial.cents.per.kilowatthour ) %>% 
+  rename( Industrial = industrial.cents.per.kilowatthour ) %>% 
+  arrange( Date ) %>% 
+  select( Date, Residential)
+
+head(electricity_price_processed)
+summary(electricity_price_processed)
+
+#No NAs so we don't need to worry about missing values
+
+write.csv(electricity_price_processed,file="./Data/Processed/ElectricityPrice.csv",row.names = FALSE)
+
+```
+## Importing Renewable Generation Data
+
+Consider the data file "Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.xlsx". The data comes from the US Energy Information and Administration and corresponds to the January 2022 **Monthly** Energy Review. You will work only with the following column: Total Renewable Energy Production.  
+
+
+```{r}
+#Load/install required package here
+library(xlsx)
+
+#Importing data set - using xlsx package
+energy_data <- read.xlsx(file="./Data/Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.xlsx",header=FALSE,startRow = 13,sheetIndex=1) #startRow is equivalent to skip on read.table
+
+#Now let's extract the column names from row 11 only
+read_col_names <- read.xlsx(file="./Data/Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.xlsx",header=FALSE,startRow = 11,endRow=11,sheetIndex=1)
+
+colnames(energy_data) <- read_col_names
+head(energy_data)
+
+energy_data_processed <- energy_data %>% 
+  mutate(Date = Month) %>% 
+  mutate(Renewable.Energy = `Total Renewable Energy Production`) %>% 
+  select(Date, Renewable.Energy)
+
+write.csv(energy_data_processed,file="./Data/Processed/RenewableEnergy.csv",row.names = FALSE)
+
+```
