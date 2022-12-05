@@ -1,2 +1,2 @@
 # TSA_Demo
-Shiny app for demo class
+Demo class on Trend and Seasonal Component Estimation
