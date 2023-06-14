@@ -1,7 +1,7 @@
 ---
-title: "TSA Demo Class: Trend and Seasonality - Renewable Energy Production Modeling"
+title: "TSA: Trend and Seasonality - Renewable Energy Production Modeling"
 author: "Luana Lima"
-date: "12/05/2022"
+date: "15/06/2023"
 output: pdf_document
 editor_options: 
   chunk_output_type: inline
@@ -222,7 +222,7 @@ Now that you understand the principle, there are functions in R that will automa
 
 
 ```{r}
-decompose <- decompose(ts_original_data) 
+decompose <- decompose(ts_original_data,type="multiplicative") 
 plot(decompose)
 
 ```
