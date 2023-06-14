@@ -2,7 +2,7 @@
 title: "TSA: Trend and Seasonality - Amazon Inflow Modeling"
 author: "Luana Lima"
 date: "15/06/2023"
-output: pdf_document
+output: rmarkdown::github_document
 editor_options: 
   chunk_output_type: inline
 ---
