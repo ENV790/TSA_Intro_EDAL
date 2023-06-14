@@ -2,8 +2,7 @@
 title: "TSA: Trend and Seasonality  - Electricity Price Modeling"
 author: "Luana Lima"
 date: "15/06/2023"
-output: rmarkdown::github_document
-editor_options: 
+editor_options:
   chunk_output_type: inline
 ---
 
@@ -94,7 +93,7 @@ beta1=as.numeric(linear_trend_model$coefficients[2])
 ```
 Note that coefficients for the linear trend, beta 1 have a p-value greater than 0.05, which means the coefficient is not significant. Let's visualize this.
 
-```{r detrend, message=FALSE, warning=FALSE}
+```{r removelineartrend, message=FALSE, warning=FALSE}
 #create linear trend series
 linear_trend <- (beta0+beta1*t)
 ts_linear_trend <- ts(linear_trend,start=c(year1,month1),frequency=12) 
