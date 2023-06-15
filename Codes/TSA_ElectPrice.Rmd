@@ -1,0 +1,248 @@
+---
+title: "TSA: Trend and Seasonality  - Electricity Price Modeling"
+author: "Luana Lima"
+date: "15/06/2023"
+output: rmarkdown::github_document
+editor_options:
+  chunk_output_type: inline
+---
+
+## Loading packages and initializing
+
+It's useful to designate one code chunk to load packages on the beginning of the file. You can always add to this chunk as needed. But concentrate the packages needed on only one chunk. 
+By setting message = FALSE and warning = FALSE, the code will run but nothing will be printed. 
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(forecast)
+
+mytheme <- theme_classic(base_size = 14) +
+  theme(axis.text = element_text(color = "black"), 
+        legend.position = "top") 
+theme_set(mytheme)
+```
+
+## Importing data
+
+For this module we will work with monthly average for electricity retail price in US. The data is from the U.S. Energy Information Administration and can be download [here][https://www.eia.gov/electricity/data/browser/#/topic/7?agg=2,0,1&geo=g&freq=M%2013:41:41%20GMT-0500%20(EST)].
+
+The original file was imported and cleaned/wrangled in "ImportData.Rmd". Here we are just reading the data already processed and ready to be used for time series analysis. To import the .csv file we will use  *read.csv()*. This function will store the data as a data frame and has useful inputs such as
+
+* *file = * : use this input to point to yoru data file. If it's on the same folder as your .Rmd then you only need to write the file name. But if it's on another folder you need to point to the path were file is located;
+* *header =* : if your file has a header you should set this to TRUE, o.w. FALSE;
+* *skip =* : if your file has rows explaining the data or any other rows on the top that need to be skipped you should just set skip to be equal to the number of row that should be skipped before reading the data. Mote that if header=TRUE, you should not skip the row with the header. The default is *skip=0*;
+* *dec =* : define *dec="."* or *dec=","* depending on how it's defined on your set. The default is ".".
+
+```{r importdata, message=FALSE, warning=FALSE}
+
+#Importing time series data from csv file#
+original_data <- read.csv("./Data/Processed/ElectricityPrice.csv")
+
+nobs <- nrow(original_data)
+head(original_data,10)
+
+```
+## Transforming data into time series object
+
+Many of the functions we will use require a time series object. You can transform your data in a time series using the function *ts()*. 
+
+```{r transformts, message=FALSE, warning=FALSE}
+year1 <- year(original_data$Date[1])
+month1 <- month(original_data$Date[1])
+ts_original_data <- ts(original_data$Residential,start=c(year1,month1),frequency=12) 
+ts_original_data
+```
+
+Note that ts_original_data has information on start, end and frequency. 
+
+## Initial Plots
+
+Initial time series plot. We will use the ggplot environment adapted for time series data by package *forecast*. It tries give better default graphics and customized choices for time series objects. The equivalent of *ggplot()* for time series data is *autoplot()* and we will use *autolayer()* to add more than one series to the same plot. 
+
+```{r tsplot,  warning = FALSE, message=FALSE}
+
+autoplot(ts_original_data, color="darkblue") +
+    ylab("Electricity Price [cents/kWh]") +
+    xlab("")
+  
+
+```
+
+
+## Trend Component
+
+Let's identify and remove trend component like we leaned in class. Start by fitting a linear trend model to $Y_t=\beta_0+\beta_1*t+\epsilon_t$. 
+
+```{r trend, warning = FALSE, message=FALSE}
+#create vector t
+t <- c(1:nobs)
+
+#combine t and original into one data frame
+data <- data.frame("t"=t,"original"=original_data$Residential)
+
+#Fit a linear trend to TS, lm function needs a data frame object
+linear_trend_model=lm(original~t,data)  
+summary(linear_trend_model)
+
+#first coefficient is the intercept term or beta0
+beta0=as.numeric(linear_trend_model$coefficients[1])  
+
+#second coefficient is the slope or beta1
+beta1=as.numeric(linear_trend_model$coefficients[2])  
+
+```
+Note that coefficients for the linear trend, beta 1 have a p-value greater than 0.05, which means the coefficient is not significant. Let's visualize this.
+
+```{r removelineartrend, message=FALSE, warning=FALSE}
+#create linear trend series
+linear_trend <- (beta0+beta1*t)
+ts_linear_trend <- ts(linear_trend,start=c(year1,month1),frequency=12) 
+
+#visualize the trend on observed data
+autoplot(ts_original_data, color="darkblue") +
+  autolayer(ts_linear_trend,series="Linear Trend") +
+  ylab("Electricity Price [cents/kWh]") +
+  xlab("") +
+  labs(color="")
+
+```
+
+##Smoothing out the trend
+
+Since the overall linear trend was not significant, let's try the rolling average method. We have monthly data so our frequency is 12. We will use a moving average of order 12 to remove the seasonal influence from trend analysis.
+
+```{r trendplots, warning = FALSE, message=FALSE}
+
+order <- 6 #frequency = 12
+smooth_trend <- array(NA,nobs)
+for(t in (order+1):(nobs)){
+  smooth_trend[t] = mean(original_data$Residential[(t-order+1):(t+order)])
+}
+  
+ts_smooth_trend <- ts(smooth_trend,start=c(year1,month1),frequency=12) 
+
+autoplot(ts_original_data, col="darkblue") +
+  autolayer(ts_linear_trend,series="Linear Trend" ) +
+  autolayer(ts_smooth_trend,series="Smooth Trend" ) +
+  ylab("Electricity Price [cents/kWh]") +
+  xlab("") +
+  labs(color="")
+
+```
+
+
+## Detrend Series
+
+Now let's remove the rolling average trend from the original series.
+
+```{r detrend, message=FALSE, warning=FALSE}
+#Create detrended series from linear trend
+detrend_linear <- original_data$Residential-(beta0+beta1*data$t)   
+year1 <- year(original_data$Date[1])
+month1 <- month(original_data$Date[1])
+ts_detrend_linear <- ts(detrend_linear,start=c(year1,month1),frequency=12) 
+
+#Create detrended series from rolling average trend - that the we will use
+detrend_smooth <- original_data$Residential - smooth_trend
+ts_detrend_smooth <- ts_original_data-ts_smooth_trend
+
+autoplot(ts_original_data, col="darkblue") +
+  autolayer(ts_detrend_smooth,series="Detrended Series" ) +
+  ylab("Electricity Price [cents/kWh]") +
+  xlab("") +
+  labs(color="")
+```
+
+
+
+## Seasonal Component
+
+Now let's shift attention to the seasonal component. We will fit a Seasonal Means Model to our detrended data.
+
+```{r seasonalmeans, message=FALSE, warning=FALSE}
+#First create the seasonal dummies
+dummies <- seasonaldummy(ts_detrend_smooth)  #this function only accepts ts object
+
+#Then fit a linear model to the seasonal dummies
+seas_means_model=lm(detrend_smooth~dummies)
+summary(seas_means_model)
+
+#Look at the regression coefficient. These will be the values of Beta
+
+#Store regression coefficients
+beta_int=seas_means_model$coefficients[1]
+beta_coeff=seas_means_model$coefficients[2:12]
+
+
+
+```
+
+```{r}
+#compute seasonal component
+seas_component=array(0,nobs)
+for(i in 1:nobs){
+  seas_component[i]=(beta_int+beta_coeff%*%dummies[i,])
+}
+
+#Transform into a ts object
+ts_seasonal_component <- ts(seas_component,start=c(year1,month1),frequency=12) 
+
+#Understanding what we did
+autoplot(ts_detrend_smooth,series="Observed - Trend") +
+  autolayer(ts_seasonal_component,series="Seasonal Component",alpha=0.5) +
+  ylab("Electricity Price [cents/kWh]") +
+  xlab("") +
+  labs(color="")
+
+```
+
+
+## Combine Seasonal and Trend
+
+Now let's add seasonal and trend component and see how it maps onto orignal data series.
+
+```{r message=FALSE, warning=FALSE}
+#Create seasonal + trend object
+ts_seasonal_trend <- ts_seasonal_component + ts_smooth_trend 
+
+#Understanding what we did
+autoplot(ts_original_data, color="darkblue") +
+  autolayer(ts_seasonal_trend,series="Seasonal + Trend", alpha=0.7) +
+  ylab("Electricity Price [cents/kWh]") +
+  xlab("") +
+  labs(color="")
+
+```
+
+## Decompose and Forecast
+
+Now that you understand the principle, there are functions in R that will automatically decompose your time series data like the *decompose()* and the *stl()* from the *stats* package. This functions only take time series objects. They will decompose your time series into three components: trend, seasonal and random. This is similar to what we did in the script, but in a more automated way. The random component is the time series without seasonal and trend component. 
+
+
+
+```{r}
+decompose <- decompose(ts_original_data,"additive") 
+plot(decompose)
+
+```
+  
+  
+```{r}
+decompose <- stl(ts_original_data,s.window="periodic")
+plot(decompose)
+```
+  
+
+## Forecast with seasonal trend model
+
+```{r decompose,  warning = FALSE, message=FALSE}
+fit <- stl(ts_original_data,s.window="periodic")
+
+original_forecast <- forecast(fit, h=48)
+
+autoplot(original_forecast) + 
+  ylab("Electricity Price [cents/kWh]") + 
+  ggtitle("Forecast with Seasonal Trend Model")
+
+```
