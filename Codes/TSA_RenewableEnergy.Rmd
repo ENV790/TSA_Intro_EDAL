@@ -1,8 +1,9 @@
 ---
-title: "TSA: Trend and Seasonality  - Electricity Price Modeling"
+title: "TSA: Trend and Seasonality - Renewable Energy Production Modeling"
 author: "Luana Lima"
 date: "15/06/2023"
-editor_options:
+output: rmarkdown::github_document
+editor_options: 
   chunk_output_type: inline
 ---
 
@@ -24,7 +25,7 @@ theme_set(mytheme)
 
 ## Importing data
 
-For this module we will work with monthly average for electricity retail price in US. The data is from the U.S. Energy Information Administration and can be download [here][https://www.eia.gov/electricity/data/browser/#/topic/7?agg=2,0,1&geo=g&freq=M%2013:41:41%20GMT-0500%20(EST)].
+The data comes from the US Energy Information and Administration and corresponds to the January 2022 **Monthly** Energy Review. You will work only with the following column: Total Renewable Energy Production.
 
 The original file was imported and cleaned/wrangled in "ImportData.Rmd". Here we are just reading the data already processed and ready to be used for time series analysis. To import the .csv file we will use  *read.csv()*. This function will store the data as a data frame and has useful inputs such as
 
@@ -36,7 +37,7 @@ The original file was imported and cleaned/wrangled in "ImportData.Rmd". Here we
 ```{r importdata, message=FALSE, warning=FALSE}
 
 #Importing time series data from csv file#
-original_data <- read.csv("./Data/Processed/ElectricityPrice.csv")
+original_data <- read.csv("./Data/Processed/RenewableEnergy.csv")
 
 nobs <- nrow(original_data)
 head(original_data,10)
@@ -49,7 +50,7 @@ Many of the functions we will use require a time series object. You can transfor
 ```{r transformts, message=FALSE, warning=FALSE}
 year1 <- year(original_data$Date[1])
 month1 <- month(original_data$Date[1])
-ts_original_data <- ts(original_data$Residential,start=c(year1,month1),frequency=12) 
+ts_original_data <- ts(original_data$Renewable.Energy,start=c(year1,month1),frequency=12) 
 ts_original_data
 ```
 
@@ -62,7 +63,7 @@ Initial time series plot. We will use the ggplot environment adapted for time se
 ```{r tsplot,  warning = FALSE, message=FALSE}
 
 autoplot(ts_original_data, color="darkblue") +
-    ylab("Electricity Price [cents/kWh]") +
+    ylab("Renewable Energy Production [Trillion Btu]") +
     xlab("")
   
 
@@ -78,7 +79,7 @@ Let's identify and remove trend component like we leaned in class. Start by fitt
 t <- c(1:nobs)
 
 #combine t and original into one data frame
-data <- data.frame("t"=t,"original"=original_data$Residential)
+data <- data.frame("t"=t,"original"=original_data$Renewable.Energy)
 
 #Fit a linear trend to TS, lm function needs a data frame object
 linear_trend_model=lm(original~t,data)  
@@ -93,7 +94,7 @@ beta1=as.numeric(linear_trend_model$coefficients[2])
 ```
 Note that coefficients for the linear trend, beta 1 have a p-value greater than 0.05, which means the coefficient is not significant. Let's visualize this.
 
-```{r removelineartrend, message=FALSE, warning=FALSE}
+```{r detrend, message=FALSE, warning=FALSE}
 #create linear trend series
 linear_trend <- (beta0+beta1*t)
 ts_linear_trend <- ts(linear_trend,start=c(year1,month1),frequency=12) 
@@ -101,7 +102,7 @@ ts_linear_trend <- ts(linear_trend,start=c(year1,month1),frequency=12)
 #visualize the trend on observed data
 autoplot(ts_original_data, color="darkblue") +
   autolayer(ts_linear_trend,series="Linear Trend") +
-  ylab("Electricity Price [cents/kWh]") +
+  ylab("Renewable Energy Production [Trillion Btu]") +
   xlab("") +
   labs(color="")
 
@@ -116,7 +117,7 @@ Since the overall linear trend was not significant, let's try the rolling averag
 order <- 6 #frequency = 12
 smooth_trend <- array(NA,nobs)
 for(t in (order+1):(nobs)){
-  smooth_trend[t] = mean(original_data$Residential[(t-order+1):(t+order)])
+  smooth_trend[t] = mean(original_data$Renewable.Energy[(t-order+1):(t+order)])
 }
   
 ts_smooth_trend <- ts(smooth_trend,start=c(year1,month1),frequency=12) 
@@ -124,7 +125,7 @@ ts_smooth_trend <- ts(smooth_trend,start=c(year1,month1),frequency=12)
 autoplot(ts_original_data, col="darkblue") +
   autolayer(ts_linear_trend,series="Linear Trend" ) +
   autolayer(ts_smooth_trend,series="Smooth Trend" ) +
-  ylab("Electricity Price [cents/kWh]") +
+  ylab("Renewable Energy Production [Trillion Btu]") +
   xlab("") +
   labs(color="")
 
@@ -135,20 +136,20 @@ autoplot(ts_original_data, col="darkblue") +
 
 Now let's remove the rolling average trend from the original series.
 
-```{r detrend, message=FALSE, warning=FALSE}
+```{r detrendsmooth, message=FALSE, warning=FALSE}
 #Create detrended series from linear trend
-detrend_linear <- original_data$Residential-(beta0+beta1*data$t)   
+detrend_linear <- original_data$Renewable.Energy-(beta0+beta1*data$t)   
 year1 <- year(original_data$Date[1])
 month1 <- month(original_data$Date[1])
 ts_detrend_linear <- ts(detrend_linear,start=c(year1,month1),frequency=12) 
 
 #Create detrended series from rolling average trend - that the we will use
-detrend_smooth <- original_data$Residential - smooth_trend
+detrend_smooth <- original_data$Renewable.Energy - smooth_trend
 ts_detrend_smooth <- ts_original_data-ts_smooth_trend
 
 autoplot(ts_original_data, col="darkblue") +
   autolayer(ts_detrend_smooth,series="Detrended Series" ) +
-  ylab("Electricity Price [cents/kWh]") +
+  ylab("Renewable Energy Production [Trillion Btu]") +
   xlab("") +
   labs(color="")
 ```
@@ -190,7 +191,7 @@ ts_seasonal_component <- ts(seas_component,start=c(year1,month1),frequency=12)
 #Understanding what we did
 autoplot(ts_detrend_smooth,series="Observed - Trend") +
   autolayer(ts_seasonal_component,series="Seasonal Component",alpha=0.5) +
-  ylab("Electricity Price [cents/kWh]") +
+  ylab("Renewable Energy Production [Trillion Btu]") +
   xlab("") +
   labs(color="")
 
@@ -208,7 +209,7 @@ ts_seasonal_trend <- ts_seasonal_component + ts_smooth_trend
 #Understanding what we did
 autoplot(ts_original_data, color="darkblue") +
   autolayer(ts_seasonal_trend,series="Seasonal + Trend", alpha=0.7) +
-  ylab("Electricity Price [cents/kWh]") +
+  ylab("Renewable Energy Production [Trillion Btu]") +
   xlab("") +
   labs(color="")
 
@@ -221,7 +222,7 @@ Now that you understand the principle, there are functions in R that will automa
 
 
 ```{r}
-decompose <- decompose(ts_original_data,"additive") 
+decompose <- decompose(ts_original_data,type="multiplicative") 
 plot(decompose)
 
 ```
@@ -241,7 +242,7 @@ fit <- stl(ts_original_data,s.window="periodic")
 original_forecast <- forecast(fit, h=48)
 
 autoplot(original_forecast) + 
-  ylab("Electricity Price [cents/kWh]") + 
+  ylab("Renewable Energy Production [Trillion Btu]") + 
   ggtitle("Forecast with Seasonal Trend Model")
 
 ```
